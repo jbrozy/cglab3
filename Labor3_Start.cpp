@@ -15,6 +15,7 @@ struct myVertexType //selbst definierter Datentyp für die Shaderprogramme
 {
 	float x, y, z;
 	float r, g, b;
+	float nx, ny, nz;
 
 
 	myVertexType(myVertexType other, vec3 norm)
@@ -22,11 +23,16 @@ struct myVertexType //selbst definierter Datentyp für die Shaderprogramme
 		x = other.x;
 		y = other.y;
 		z = other.z;
+
 		r = other.r;
 		g = other.g;
 		b = other.b;
 
+		nx = norm[0];
+		ny = norm[1];
+		nz = norm[2];
 	}
+
 	myVertexType(float x, float y, float z, float r, float g, float b)
 	{
 		this->x = x;
@@ -37,16 +43,23 @@ struct myVertexType //selbst definierter Datentyp für die Shaderprogramme
 		this->g = g;
 		this->b = b;
 
-
-
+		nx = 0;
+		ny = 0;
+		nz = 0;
 	}
-	myVertexType() { x = y = z = r = g = b = 0; }
+	myVertexType() { x = y = z = r = g = b = nx = ny = nz = 0; }
 
 };
 
-myVertexType vertices[6];//Array mit drei Vertexen
+myVertexType vertices[36]; //Array mit drei Vertexen
 
-float ambfac = 0.7;
+float ambfac = 0.3;
+float diffusionFactor = 0.3;
+int shininessFactor = 16;
+float specularFactor = 0.6;
+
+vec3 lightDir{ 0, 0, 1 };
+
 
 //Key-Callback
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -60,6 +73,27 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 			else
 				ambfac -= .1f;//ambienten Faktor senken
 		}
+		if (key == GLFW_KEY_D)//Wenn diese Taste "A" war
+		{
+			if (mods == 1)//Wenn Shift zusätzlich gehalten ist
+				diffusionFactor += .1f;//ambienten Faktor erhöhen
+			else
+				diffusionFactor -= .1f;//ambienten Faktor senken
+		}
+		if (key == GLFW_KEY_S)//Wenn diese Taste "A" war
+		{
+			if (mods == 1)//Wenn Shift zusätzlich gehalten ist
+				specularFactor += .1f;//ambienten Faktor erhöhen
+			else
+				specularFactor -= .1f;//ambienten Faktor senken
+		}
+		if (key == GLFW_KEY_G)//Wenn diese Taste "A" war
+		{
+			if (mods == 1)//Wenn Shift zusätzlich gehalten ist
+				shininessFactor += 1.0f;//ambienten Faktor erhöhen
+			else
+				shininessFactor -= 1.0f;//ambienten Faktor senken
+		}
 	}
 }
 
@@ -67,7 +101,7 @@ int main(void)
 {
 	GLFWwindow* window;
 	GLuint vertex_buffer, vertex_shader, fragment_shader, complete_shader_program;
-	GLint  matrix_access, ambient, position_access, color_access;
+	GLint  matrix_access, ambient, diffusion, specular, shininess, position_access, color_access, normal_access, light_dir_access;
 
 	myVertexType cubeEdges[8]
 	{
@@ -81,6 +115,7 @@ int main(void)
 		/*7*/myVertexType(-1.0f,+1.0f,-1.0f,0.0f,0.0f,0.0f) //schwarz
 	};
 
+	cubeEdges[0] = myVertexType( myVertexType(+1.0f, +1.0f, +1.0f, 1.0f, 0.0f, 0.0f), vec3{ 1, 0, 0 });
 	//verkleinere Würfelkoordinaten
 	for (int i = 0; i < 8; i++)
 	{
@@ -89,11 +124,71 @@ int main(void)
 		cubeEdges[i].z *= 0.5;
 	}
 
-	//linke Seite erstes Dreieck
-	vertices[0] = cubeEdges[2];
-	vertices[1] = cubeEdges[1];
-	vertices[2] = cubeEdges[0];
+	vec3 leftside  = { 1, 0, 0 };
+	vec3 rightside = { -1, 0, 0 };
+	vec3 front = { 0 ,0 ,1 };
+	vec3 top = { 0 , 1 , 0 };
+	vec3 bottom = { 0 , -1 , 0 };
+	vec3 back = { 0 , 0, -1 };
 
+	//linke Seite erstes Dreieck
+	vertices[0] = myVertexType(cubeEdges[2], leftside);
+	vertices[1] = myVertexType(cubeEdges[1], leftside);
+	vertices[2] = myVertexType(cubeEdges[0], leftside);
+
+	vertices[3] = myVertexType(cubeEdges[3], leftside);
+	vertices[4] = myVertexType(cubeEdges[2], leftside);
+	vertices[5] = myVertexType(cubeEdges[0], leftside);
+
+	// Front des Dreiceck 
+
+	vertices[6] = myVertexType(cubeEdges[4], front);
+	vertices[7] = myVertexType(cubeEdges[0], front);
+	vertices[8] = myVertexType(cubeEdges[3], front);
+
+	vertices[9] = myVertexType(cubeEdges[3], front);
+	vertices[10] = myVertexType(cubeEdges[4], front);
+	vertices[11] = myVertexType(cubeEdges[5], front);
+
+	// top side
+
+	vertices[12] = myVertexType(cubeEdges[4], top);
+	vertices[13] = myVertexType(cubeEdges[0], top);
+	vertices[14] = myVertexType(cubeEdges[1], top);
+
+	vertices[15] = myVertexType(cubeEdges[4], top);
+	vertices[16] = myVertexType(cubeEdges[7], top);
+	vertices[17] = myVertexType(cubeEdges[1], top);
+
+	//back
+
+	vertices[18] = myVertexType(cubeEdges[2], back);
+	vertices[19] = myVertexType(cubeEdges[6], back);
+	vertices[20] = myVertexType(cubeEdges[1], back);
+
+	vertices[21] = myVertexType(cubeEdges[6], back);
+	vertices[22] = myVertexType(cubeEdges[7], back);
+	vertices[23] = myVertexType(cubeEdges[1], back);
+
+	//right side 
+
+	vertices[24] = myVertexType(cubeEdges[6], rightside);
+	vertices[25] = myVertexType(cubeEdges[5], rightside);
+	vertices[26] = myVertexType(cubeEdges[4], rightside);
+
+	vertices[27] = myVertexType(cubeEdges[6], rightside);
+	vertices[28] = myVertexType(cubeEdges[4], rightside);
+	vertices[29] = myVertexType(cubeEdges[7], rightside);
+
+	//bottom side
+
+	vertices[30] = myVertexType(cubeEdges[5], bottom);
+	vertices[31] = myVertexType(cubeEdges[3], bottom);
+	vertices[32] = myVertexType(cubeEdges[2], bottom);
+
+	vertices[33] = myVertexType(cubeEdges[5], bottom);
+	vertices[34] = myVertexType(cubeEdges[2], bottom);
+	vertices[35] = myVertexType(cubeEdges[6], bottom);
 
 
 	if (!glfwInit())//GLFW initialisieren
@@ -139,11 +234,17 @@ int main(void)
 	//Uniforme Positionen für den Zugriff während des Renderns
 	matrix_access = glGetUniformLocation(complete_shader_program, "matrix");
 	ambient = glGetUniformLocation(complete_shader_program, "ambientFactor");
+	diffusion = glGetUniformLocation(complete_shader_program, "diffuseFactor");
+	specular = glGetUniformLocation(complete_shader_program, "specularFactor");
+	shininess = glGetUniformLocation(complete_shader_program, "shininessFactor");
 
 
 	//Zugriff auf Position und Farbe innerhalb des Vertex-Buffers
 	position_access = glGetAttribLocation(complete_shader_program, "position");
 	color_access = glGetAttribLocation(complete_shader_program, "color");
+	normal_access = glGetAttribLocation(complete_shader_program, "normals");
+
+	light_dir_access = glGetAttribLocation(complete_shader_program, "lightDir");
 
 	//Aufbau und Übermittlung des Vertex-Buffers
 	glGenBuffers(1, &vertex_buffer);
@@ -159,6 +260,9 @@ int main(void)
 	glVertexAttribPointer(color_access, 3, GL_FLOAT, GL_FALSE,
 		sizeof(myVertexType), (void*)(sizeof(float) * 3));
 
+	glEnableVertexAttribArray(normal_access);
+	glVertexAttribPointer(normal_access, 3, GL_FLOAT, GL_FALSE,
+		sizeof(myVertexType), (void*)(sizeof(float) * 6));
 
 	//Z-Achse positiv defineren
 	glClearDepth(0);
@@ -174,14 +278,20 @@ int main(void)
 
 		//Rotationsmatrix erstellen
 		mat4x4_identity(m);//Über die Linmath.h wird eine 4x4 Einheitsmatrix erzeugt
-		//	mat4x4_rotate_Z(m, m, (float)glfwGetTime());//Auf die Matrix m wird eine Rotation um Z aufmultipliziert
-		//	mat4x4_rotate_Y(m, m, 10*2*PI/360/*(float)glfwGetTime() / 100*/);//Auf die Matrix m wird eine Rotation um Y aufmultipliziert
-		mat4x4_rotate_Y(m, m, 2 * PI * 10 / 360 * sin((float)glfwGetTime()));
+		mat4x4_rotate_Z(m, m, (float)glfwGetTime());//Auf die Matrix m wird eine Rotation um Z aufmultipliziert
+		mat4x4_rotate_Y(m, m, (float)glfwGetTime());//Auf die Matrix m wird eine Rotation um Y aufmultipliziert
+		mat4x4_rotate_X(m, m, (float)glfwGetTime());//Auf die Matrix m wird eine Rotation um Y aufmultipliziert
+
+		// mat4x4_rotate_Y(m, m, 2 * PI * 10 / 360 * sin((float)glfwGetTime()));
 		glUniformMatrix4fv(matrix_access, 1, GL_FALSE, (const GLfloat*)m);// Die Matrix wird in das Shader-Programm übertragen
 
 		glUniform1f(ambient, ambfac);// Der ambiente Faktor wird in das Shader-Programm übertragen
+		glUniform1f(diffusion, diffusionFactor);// Der ambiente Faktor wird in das Shader-Programm übertragen
+		glUniform1f(specular, specularFactor);// Der ambiente Faktor wird in das Shader-Programm übertragen
+		glUniform1i(shininess, shininessFactor);// Der ambiente Faktor wird in das Shader-Programm übertragen
+		glUniform3f(light_dir_access, (GLfloat)lightDir[0], (GLfloat)lightDir[1], (GLfloat)lightDir[2]);
 
-		glDrawArrays(GL_TRIANGLES, 0, 3);//Ein Dreieck wird gezeichnet
+		glDrawArrays(GL_TRIANGLES, 0, 36);//Ein Dreieck wird gezeichnet
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
